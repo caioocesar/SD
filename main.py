@@ -1,8 +1,12 @@
 import relogio
+import com
 
-relogio.iniciar_relogio()
+class Bully:
+    def verificar_lideranca(self):
+        pass
 
-for i in range(1000000):
-    print(relogio.get_tempo())
+    def promover_eleicao(self):
+        pass
 
-relogio.finalizar_relogio()
+class Berkley:
+    pass

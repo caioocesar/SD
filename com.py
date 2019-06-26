@@ -14,15 +14,18 @@ class Comunicacao():
 
         self._sock_remetente = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         self._sock_remetente.setsockopt(IPPROTO_IP, IP_MULTICAST_TTL, 1)
-        self._sock_receptor.setblocking(False)
+        self._sock_receptor.setblocking(False) # Tornando o socket com o tipo de chamada não bloqueante
+
+        # self._sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        # self._sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        # self._sock.setsockopt(IPPROTO_IP, IP_MULTICAST_TTL, 1)
+        # self._sock.setblocking(False)  # Tornando o socket com o tipo de chamada não bloqueante
 
         self.mcast_group = '239.0.0.1'
         self.mcast_port = 6000
         self.mcast_addrss = (self.mcast_group, self.mcast_port)
-        self.p_len = 2
+        self.p_len = 4
         self._client_list = []
-
-        # self._sock.setblocking(False) # Tornando o socket com o tipo de chamada não bloqueante
 
     def bind(self):
         try:
@@ -35,13 +38,17 @@ class Comunicacao():
             print(str(e))
 
     def receber(self):
-        global recv_msg
 
-        if recv_msg == b'':
-            self._receber()
+        header = None
+        msg = None
 
-        msg = recv_msg
-        recv_msg = b''
+        if header is None:
+            header = self._read_header()
+
+        if header:
+            if msg is None:
+                msg = self._read_msg(header)
+
         return msg.decode(def_cod)
 
     def enviar(self, msg):
@@ -54,22 +61,17 @@ class Comunicacao():
         while totalsent < total_len:
             sent = self._sock_remetente.sendto(data[totalsent:], self.mcast_addrss)  # min(totalsent + self.LENMAX, total_len - totalsent)
             if sent == 0:
-                raise RuntimeError("enviar: socket connection broken")
+                raise RuntimeError("enviar: Conexão socket quebrada")
 
             totalsent += sent
 
     def _receber(self):
         ''' Método que roda na thread para receber os dados que são recebidos da rede e concatenar no self.recvBuffer'''
-        hdr_len = None
         header = None
         msg = None
 
-        if hdr_len is None:
-            hdr_len = self._read_protoheader()
-
-        if hdr_len is not None:
-            if header is None:
-                header = self._read_header(hdr_len)
+        if header is None:
+            header = self._read_header()
 
         if header:
             if msg is None:
@@ -77,51 +79,41 @@ class Comunicacao():
 
         return msg
 
-    def _read_protoheader(self):
+    def _read_header(self):
         chunks = []
         bytes_recv = 0
         while bytes_recv < self.p_len:
-            chunk = self._sock_receptor.recv(min(LENMAX, self.p_len - bytes_recv))
+            chunk = self._sock_receptor.recv(min(self.LENMAX, self.p_len - bytes_recv))
             if chunk == b'':
-                raise RuntimeError("connection broken")
+                raise RuntimeError("Read Header: Conexão quebrada")
             chunks.append(chunk)
             bytes_recv = bytes_recv + len(chunk)
-        return int(b''.join(chunks))
 
-    def _read_header(self, hdr_len):
-        # Interessante caso o cabeçalho tenha mais de um item
-        # for reqhdr in ("byteorder","content-length","content-type","content-encoding",):
-        #     if reqhdr not in self.jsonheader:
-        #         raise ValueError(f'Missing required header "{reqhdr}".')
-        chunks = []
-        bytes_recv = 0
-        while bytes_recv < hdr_len:
-            chunk = self._sock_receptor.recv(min(LENMAX, hdr_len - bytes_recv))
-            if chunk == b'':
-                raise RuntimeError("connection broken")
-            chunks.append(chunk)
-            bytes_recv = bytes_recv + len(chunk)
-        return int(b''.join(chunks))
+        try:
+            return int(b''.join(chunks))
+        except ValueError:
+            raise RuntimeError("Read Header: Recebido valor inesperado !int = {}".format(b''.join(chunks)))
 
     def _read_msg(self, msg_len):
         chunks = []
         bytes_recv = 0
         while bytes_recv < msg_len:
-            chunk = self._sock_receptor.recv(min(LENMAX, msg_len - bytes_recv))
+            chunk = self._sock_receptor.recv(min(self.LENMAX, msg_len - bytes_recv))
             if chunk == b'':
-                raise RuntimeError("connection broken")
+                raise RuntimeError("read msg: Conexão Quebrada")
             chunks.append(chunk)
             bytes_recv = bytes_recv + len(chunk)
         return b''.join(chunks)
 
     def _cod_msg(self, msg):
-        msg_cod = msg.encode(def_cod)
-        HDRLEN = str(len(msg_cod))  # tamanho do cabeçalho
-        prt_hdr = str(len(HDRLEN))  # tamanho do proto cabeçalho
-        if len(prt_hdr) < self.p_len:
-            # caso o proto cabeçalho tenha uma quantidade de algarismos menor do que a esperada, será concatenado a quantidade de zeros necessaria na frente
-            prt_hdr = '0' * (self.p_len - len(prt_hdr)) + prt_hdr
-        elif len(prt_hdr) > self.p_len:
-            raise RuntimeError("Proto Cabeçalho maior que", self.p_len, "bytes")
 
-        return (prt_hdr + HDRLEN).encode(def_cod) + msg_cod  # Dado que será efetivamente enviado = (proto cabeçalho + cabeçalho).encode + mensagem codificada
+        msg_cod = msg.encode(def_cod)
+        hdr_len = str(len(msg_cod))  # tamanho do cabeçalho
+
+        if len(hdr_len) < self.p_len:
+            # caso o cabeçalho tenha uma quantidade de algarismos menor do que a esperada, será concatenado a quantidade de zeros necessaria na frente
+            hdr_len = '0' * (self.p_len - len(hdr_len)) + hdr_len
+        elif len(hdr_len) > self.p_len:
+            raise RuntimeError("cod msg: Cabeçalho maior que", self.p_len, "bytes") # poderia tratar quebrando a mensagem
+
+        return hdr_len.encode(def_cod) + msg_cod  # Dado que será efetivamente enviado = (proto cabeçalho + cabeçalho).encode + mensagem codificada
