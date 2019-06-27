@@ -65,4 +65,18 @@ condição inicial), ele inicia uma nova eleição
   >  * O maior sempre vence, o valentão!
 
 * #### Berkley
+  >Algoritmo de Berkeley (sincronização interna)
   >
+  >* É escolhido um computador para ser o co-ordenador (master)
+  >
+  >* O master periodicamente contacta os outros computadores,(slaves)
+  >
+  >* O master faz uma estimativa do tempo local de cada slave,
+baseado no rtt.
+  >
+  >* O master calcula o tempo médio de todos os computadores,
+ignorando valores de transmissão demasiado elevados e
+máquinas com tempos muito diferentes dos outros.
+  >* Finalmente o master envia a cada computador o valor de que o
+seu relógio deve ser ajustado (esse valor pode ser positivo ou
+negativo)
